@@ -1,0 +1,775 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Attention Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a tabletop. One game board per day: agents' boards on the left, the play area (card + slots) in the middle, the human's attention track on the right. */
+:root {
+  --bg: #e6eaf1;
+  --surface: #ffffff;
+  --surface-2: #f2f4f8;
+  --ink: #18202f;
+  --muted: #586274;
+  --line: #cbd3df;
+  --token: #d18e00;
+  --token-soft: #fbedc6;
+  --token-ink: #5a3e00;
+  --a: #0e8a7e;
+  --b: #a43f9b;
+  --c: #3657c9;
+  --crit: #c4302b;
+  --crit-soft: #fbe3e1;
+  --ok: #2d7a4b;
+  --ok-soft: #dff1e5;
+  --hatch: #9aa3b4;
+  --font-display: "Unbounded", "Trebuchet MS", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131b; --surface: #171e2a; --surface-2: #1f2836; --ink: #e7ebf2; --muted: #9ba5b7; --line: #2d384a;
+    --token: #f0b429; --token-soft: #3a2e10; --token-ink: #ffe2a0;
+    --a: #3cc7b6; --b: #e07ad6; --c: #8aa2ff;
+    --crit: #ff6b62; --crit-soft: #3a1a1a; --ok: #55c98a; --ok-soft: #14301f; --hatch: #56607a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131b; --surface: #171e2a; --surface-2: #1f2836; --ink: #e7ebf2; --muted: #9ba5b7; --line: #2d384a;
+  --token: #f0b429; --token-soft: #3a2e10; --token-ink: #ffe2a0;
+  --a: #3cc7b6; --b: #e07ad6; --c: #8aa2ff;
+  --crit: #ff6b62; --crit-soft: #3a1a1a; --ok: #55c98a; --ok-soft: #14301f; --hatch: #56607a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-inline: 16px;
+  padding-block: 0 48px;
+}
+.wrap { max-width: 1240px; margin-inline: auto; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(26px, 4.2vw, 44px); line-height: 1.1; }
+h2 { font-size: clamp(19px, 2.4vw, 24px); line-height: 1.2; }
+h3 { font-size: 15px; line-height: 1.3; font-weight: 500; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--token); outline-offset: 2px; }
+
+/* Hero */
+.hero { padding-block: 40px 0; display: grid; gap: 16px; max-width: 820px; }
+.hero .lede { font-size: 17px; color: var(--muted); max-width: 64ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ag, var(--muted)); flex: none; }
+.tok { width: 12px; height: 12px; border-radius: 50%; background: var(--token); box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); flex: none; }
+
+/* Controls */
+.board { display: grid; gap: 16px; }
+.board-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.board-head .title { display: grid; gap: 4px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button { border: 0; background: transparent; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.btn:disabled { opacity: .45; cursor: default; }
+
+/* Step chips + day track */
+.steps { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.step { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; color: var(--muted); }
+.step[aria-current="step"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.step.past { color: var(--ink); }
+.step .dot { width: 8px; height: 8px; }
+
+.daytrack { position: relative; height: 70px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.daytrack .hour { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
+.daytrack .hour span { position: absolute; bottom: 4px; left: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.daytrack .slotblk { position: absolute; top: 10px; height: 30px; border-radius: 6px; background: var(--token-soft); border: 1.5px dashed var(--token); display: flex; align-items: center; justify-content: center; font-size: 11px; font-family: var(--font-mono); color: var(--token-ink); white-space: nowrap; min-width: 34px; }
+.daytrack .slotblk.done { border-style: solid; background: var(--token); color: var(--surface); }
+.daytrack .slotblk.off { background: transparent; border-color: var(--line); color: var(--muted); }
+.daytrack .zap { position: absolute; top: 6px; width: 3px; height: 38px; border-radius: 2px; background: var(--crit); transform: translateX(-1px); }
+.daytrack .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); transition: left .35s ease; }
+.daytrack .now::after { content: ""; position: absolute; top: -1px; left: -4px; border: 5px solid transparent; border-top-color: var(--ink); }
+
+/* Board grid */
+.board-grid { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.col { display: grid; gap: 16px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.panel > .eyebrow { margin-bottom: -4px; }
+@media (max-width: 980px) {
+  .board-grid { grid-template-columns: minmax(0, 1fr); }
+  .center { order: -1; }
+}
+
+/* Agent boards */
+.agent { border-left: 4px solid var(--ag); padding-left: 12px; display: grid; gap: 8px; }
+.agent + .agent { border-top: 1px solid var(--line); padding-top: 14px; }
+.agent-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.agent-head b { font-family: var(--font-display); font-weight: 500; font-size: 14px; color: var(--ag); }
+.agent-head small { color: var(--muted); font-size: 12px; text-align: right; }
+.meter { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.meter i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ag); transition: width .35s ease; }
+.meter i.pool { background: var(--token); }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.kv dd.hot { color: var(--crit); font-weight: 600; }
+.tomorrow { font-size: 12px; font-family: var(--font-mono); color: var(--ok); }
+
+/* Event card + decision */
+.play { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+@media (max-width: 560px) { .play { grid-template-columns: minmax(0, 1fr); } }
+.rcard { position: relative; background: var(--surface); border: 1.5px solid var(--ag, var(--line)); border-radius: 12px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; box-shadow: 0 2px 0 var(--line); }
+.rcard .band { background: var(--ag, var(--surface-2)); color: var(--surface); padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rcard .band .who { font-family: var(--font-display); font-weight: 500; font-size: 13px; }
+.rcard .band .time { font-family: var(--font-mono); font-size: 12px; opacity: .9; }
+.rcard.sys .band { color: var(--ink); }
+.rcard .body { padding: 12px; display: grid; gap: 10px; align-content: start; }
+.gem { position: absolute; right: 10px; top: 42px; width: 52px; height: 52px; border-radius: 50%; background: var(--token); color: var(--token-ink); display: grid; place-items: center; text-align: center; line-height: 1; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+:root[data-theme="dark"] .gem { color: #2a1d00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gem { color: #2a1d00; } }
+.gem b { font-family: var(--font-display); font-size: 20px; }
+.gem small { font-size: 9px; font-family: var(--font-mono); display: block; }
+.gem s { position: absolute; top: -6px; left: -6px; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; font-size: 10px; padding: 1px 5px; font-family: var(--font-mono); text-decoration: line-through; }
+.rcard h3 { padding-right: 60px; font-size: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 11px; font-family: var(--font-mono); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); }
+.chip.risk-high, .chip.trig { color: var(--crit); border-color: var(--crit); background: var(--crit-soft); }
+.chip.must { color: var(--ink); border-color: var(--ink); }
+.chip.self { text-decoration: line-through; }
+.card-note { font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+
+.decision { border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); padding: 12px; display: grid; gap: 8px; align-content: start; }
+.decision .who { font-size: 12px; color: var(--muted); }
+.code { justify-self: start; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); }
+.code.k-sched { color: var(--token-ink); background: var(--token-soft); border-color: var(--token); }
+.code.k-ret { color: var(--muted); }
+.code.k-int { color: var(--crit); background: var(--crit-soft); border-color: var(--crit); }
+.code.k-done { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
+.decision .rule { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.decision p { font-size: 14px; }
+
+/* Slots */
+.slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .slots { grid-template-columns: minmax(0, 1fr); } }
+.slot { border: 1.5px dashed var(--token); border-radius: 10px; padding: 12px; display: grid; gap: 10px; background: var(--surface); }
+.slot.done { border-style: solid; }
+.slot.off { border-color: var(--line); opacity: .6; }
+.slot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.slot-head b { font-family: var(--font-mono); font-size: 13px; }
+.slot-head small { font-size: 12px; color: var(--muted); }
+.cells { display: flex; flex-wrap: wrap; gap: 4px; }
+.cell { width: 24px; height: 24px; border-radius: 6px; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 11px; font-family: var(--font-mono); color: var(--muted); background: var(--surface); }
+.cell.sw { background: var(--surface-2); border-color: var(--ink); color: var(--ink); }
+.cell.it { background: var(--ag); border-color: var(--ag); color: var(--surface); }
+.slot:not(.done) .cell.it, .slot:not(.done) .cell.sw { opacity: .55; border-style: dashed; }
+.slot-items { display: grid; gap: 4px; font-size: 13px; }
+.slot-items div { display: flex; gap: 6px; align-items: center; }
+.slot-items .empty { color: var(--muted); font-size: 12px; }
+.slot-status { font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+.slot.done .slot-status { color: var(--ok); }
+
+/* Human attention track */
+.track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.track.over { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.tc { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); position: relative; transition: background .3s ease, border-color .3s ease; }
+.tc.res { background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--line) 3px 4px); }
+.tc.full { background: var(--token); border-color: var(--token); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+.tc.held { border: 1.5px dashed var(--token); background: var(--token-soft); }
+.tc.resfull { background: var(--crit); border-color: var(--crit); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+.tc.overflow { background: var(--crit); border-color: var(--crit); opacity: .85; }
+.track-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.track-legend span { display: inline-flex; gap: 6px; align-items: center; }
+.track-legend .tc { width: 12px; height: 12px; aspect-ratio: auto; }
+.bignum { display: flex; align-items: baseline; gap: 8px; }
+.bignum b { font-family: var(--font-display); font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1; }
+.bignum span { color: var(--muted); font-size: 14px; }
+.bignum.bad b { color: var(--crit); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; }
+.stat b { font-family: var(--font-mono); font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.stat.bad b { color: var(--crit); }
+.pool { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.pool .bar { flex: 1; height: 10px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.pool .bar i { display: block; height: 100%; background: var(--token); transition: width .35s ease; }
+
+.list { display: grid; gap: 6px; font-size: 13px; margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; gap: 8px; align-items: baseline; }
+.list li .dot { transform: translateY(1px); }
+.list .when { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.list .empty { color: var(--muted); font-size: 12px; }
+
+/* Rules */
+.rules { display: grid; gap: 16px; }
+.rules-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .rules-grid { grid-template-columns: minmax(0, 1fr); } }
+.rules-grid .panel p { font-size: 14px; color: var(--muted); max-width: 60ch; }
+.eq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 13px; }
+.eq .grp { display: inline-flex; gap: 3px; padding: 3px; border-radius: 8px; border: 1px dashed var(--line); }
+.eq .tot { font-weight: 600; margin-left: 4px; }
+.eq-row { display: grid; gap: 4px; }
+.eq-row small { font-size: 12px; color: var(--muted); }
+.rights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 460px) { .rights { grid-template-columns: minmax(0, 1fr); } }
+.right { border-radius: 8px; padding: 10px; background: var(--surface-2); display: grid; gap: 4px; align-content: start; font-size: 12px; }
+.right b { font-family: var(--font-mono); font-size: 12px; }
+.right em { font-style: normal; color: var(--muted); }
+.right.must { border-top: 3px solid var(--ink); }
+.right.may { border-top: 3px solid var(--token); }
+.right.not { border-top: 3px solid var(--line); }
+.cap { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; }
+.cap div { height: 34px; border-radius: 4px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--surface); }
+.cap .r { background: var(--hatch); background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.25) 4px 6px); }
+.cap .q { background: var(--ag); }
+.cap .p { background: var(--token); color: var(--token-ink); }
+.cap-legend { display: grid; grid-template-columns: 2fr 6fr 2fr; gap: 3px; font-size: 12px; color: var(--muted); text-align: center; }
+.order { margin: 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; }
+.order li::marker { font-family: var(--font-mono); color: var(--muted); }
+.order b { font-weight: 600; }
+
+/* Compare */
+.compare { display: grid; gap: 16px; }
+.cmp { display: grid; gap: 14px; }
+.cmp-row { display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr); gap: 6px 16px; align-items: center; }
+@media (max-width: 560px) { .cmp-row { grid-template-columns: minmax(0, 1fr); } }
+.cmp-row > span { font-size: 14px; }
+.bars { display: grid; gap: 4px; }
+.bar-line { display: grid; grid-template-columns: 112px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.bar-line .bg { position: relative; height: 14px; background: var(--surface-2); border-radius: 4px; }
+.bar-line .bg i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 4px; }
+.bar-line .bg i.g { background: var(--token); }
+.bar-line .bg i.b { background: var(--crit); }
+.bar-line .bg .lim { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
+.bar-line b { font-family: var(--font-mono); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; color: var(--muted); max-width: 72ch; border-left: 3px solid var(--line); padding-left: 12px; }
+footer { font-size: 12px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow">Agent Attention Game · концепт v0.2</span>
+    <h1>Один день гри за увагу людини</h1>
+    <p class="lede">Три AI-агенти, одна людина, 10 SP уваги на день. Прогорніть день крок за кроком і перемкніть режим, щоб побачити той самий потік запитів без координації.</p>
+    <div class="legend">
+      <span><i class="dot" style="--ag:var(--a)"></i>Агент A · реліз платформи</span>
+      <span><i class="dot" style="--ag:var(--b)"></i>Агент B · аналітика ринку</span>
+      <span><i class="dot" style="--ag:var(--c)"></i>Агент C · маркетинг-сайт</span>
+      <span><i class="tok"></i>1 SP уваги</span>
+    </div>
+  </header>
+
+  <section class="board" aria-label="Ігрове поле">
+    <div class="board-head">
+      <div class="title">
+        <span class="eyebrow">Ігрове поле</span>
+        <h2 id="boardTitle">Раунд: вівторок</h2>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Режим">
+          <button type="button" id="modeGame" aria-pressed="true">Гра</button>
+          <button type="button" id="modeBase" aria-pressed="false">Без координації</button>
+        </div>
+        <button type="button" class="btn" id="prev" aria-label="Попередній крок">← Назад</button>
+        <button type="button" class="btn primary" id="next">Далі →</button>
+        <button type="button" class="btn" id="play">Програти день</button>
+        <button type="button" class="btn" id="reset">Скинути</button>
+      </div>
+    </div>
+
+    <nav class="steps" id="steps" aria-label="Події дня"></nav>
+    <div class="daytrack" id="daytrack" aria-hidden="true"></div>
+
+    <div class="board-grid">
+      <aside class="col">
+        <div class="panel" id="agents"></div>
+      </aside>
+      <div class="col center">
+        <div class="play" id="event"></div>
+        <div class="panel">
+          <span class="eyebrow">Слоти дня</span>
+          <div class="slots" id="slots"></div>
+        </div>
+      </div>
+      <aside class="col">
+        <div class="panel" id="human"></div>
+        <div class="panel" id="queue"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="rules" aria-labelledby="rulesTitle">
+    <div>
+      <span class="eyebrow">Правила на одній картці</span>
+      <h2 id="rulesTitle">Що робить гру консистентною</h2>
+    </div>
+    <div class="rules-grid">
+      <div class="panel">
+        <h3>Ціна сесії = перемикання + пункти</h3>
+        <div class="eq-row">
+          <small>Три окремі переривання</small>
+          <div class="eq">
+            <span class="grp"><span class="cell sw">⇄</span><span class="cell it" style="--ag:var(--a)">1</span></span>
+            <span class="grp"><span class="cell sw">⇄</span><span class="cell it" style="--ag:var(--b)">2</span></span>
+            <span class="grp"><span class="cell sw">⇄</span><span class="cell it" style="--ag:var(--c)">2</span></span>
+            <span class="tot">= 8 SP</span>
+          </div>
+        </div>
+        <div class="eq-row">
+          <small>Один пакет у слоті</small>
+          <div class="eq">
+            <span class="grp"><span class="cell sw">⇄</span><span class="cell it" style="--ag:var(--a)">1</span><span class="cell it" style="--ag:var(--b)">2</span><span class="cell it" style="--ag:var(--c)">2</span></span>
+            <span class="tot">= 6 SP</span>
+          </div>
+        </div>
+        <p>⇄ — фіксована ціна перемикання контексту, 1 SP. Пакет вигідний автоматично, а дробити одне питання на кілька дрібних невигідно.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Права на рішення діють до економіки</h3>
+        <div class="rights">
+          <div class="right must"><b>must-ask</b><span>Незворотне, гроші понад поріг, зовнішня комунікація</span><em>Бюджет ніколи не блокує</em></div>
+          <div class="right may"><b>may-ask</b><span>Оборотний вибір із відчутним впливом</span><em>Діє черга й квоти</em></div>
+          <div class="right not"><b>must-not-ask</b><span>Оборотна дрібниця в межах політики</span><em>Вирішує сам + FYI-журнал</em></div>
+        </div>
+        <p>Обмежений бюджет не має штовхати агента мовчки діяти там, де треба питати.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Ємність дня: 10 SP</h3>
+        <div class="cap" aria-label="Розподіл 10 SP: 2 резерв, 6 квоти агентів, 2 спільний пул">
+          <div class="r">R</div><div class="r">R</div>
+          <div class="q" style="--ag:var(--a)">A</div><div class="q" style="--ag:var(--a)">A</div><div class="q" style="--ag:var(--a)">A</div>
+          <div class="q" style="--ag:var(--b)">B</div>
+          <div class="q" style="--ag:var(--c)">C</div><div class="q" style="--ag:var(--c)">C</div>
+          <div class="p">P</div><div class="p">P</div>
+        </div>
+        <div class="cap-legend"><span>резерв для аварій</span><span>квоти агентів за вагою проєкту</span><span>спільний пул</span></div>
+        <p>Квота дає право претендувати на увагу, але не гарантує її. Перенос залишку — не більше одного денного гранту; з квоти за день можна витратити не більше 1.5 гранту.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Порядок рішень Game Master</h3>
+        <ol class="order">
+          <li><b>Валідація.</b> Неповний запит або must-not-ask — повернути.</li>
+          <li><b>Критичний тригер</b> із закритого списку — переривання з резерву.</li>
+          <li><b>Ранжування:</b> дедлайн × ціна затримки → вага проєкту → вік у черзі → якість підготовки.</li>
+          <li><b>Доступ до ємності:</b> квота → спільний пул → позика з завтра.</li>
+          <li><b>Пакування</b> у слоти за типом і місткістю.</li>
+          <li><b>Решта — у видиму чергу</b> з кодом причини.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare" aria-labelledby="cmpTitle">
+    <div>
+      <span class="eyebrow">Підсумок того самого дня</span>
+      <h2 id="cmpTitle">Гра проти роботи без координації</h2>
+    </div>
+    <div class="panel cmp" id="cmp"></div>
+    <p class="note">Сценарій ілюстративний: ціни, квоти й час — стартові припущення концепту, а не виміряні дані. Для людини черга Game Master без квот дала б у цей день ту саму картину; квоти змінюють лише облік між агентами. Саме тому перевірка порівнює чергу без квот із повною грою, перш ніж впроваджувати квоти.</p>
+  </section>
+
+  <footer>Agent Attention Game · концепт v0.2 · 12 жовтня 2026 року</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var AG = {
+    A: { name: "Агент A", project: "Реліз платформи", weight: "вага: висока", G: 3, carry: 0, color: "var(--a)" },
+    B: { name: "Агент B", project: "Аналітика ринку", weight: "вага: низька", G: 1, carry: 1, color: "var(--b)" },
+    C: { name: "Агент C", project: "Маркетинг-сайт", weight: "вага: середня", G: 2, carry: 0, color: "var(--c)" }
+  };
+  var SLOTS = [
+    { id: "deep", time: "10:00", end: "10:30", label: "Глибокі рішення", cap: 5 },
+    { id: "digest", time: "16:30", end: "17:00", label: "Дайджест", cap: 3 }
+  ];
+  var LIMIT = 10, RESERVE = 2, POOL = 2;
+
+  var STEPS = [
+    { t: "08:00", label: "Ранок",
+      ev: { title: "Game Master відкриває раунд", body: "Календар дає два вікна: глибокі рішення о 10:00 і дайджест о 16:30. Ліміт дня 10 SP: 2 SP резерв, 6 SP квоти агентів, 2 SP спільний пул." },
+      game: { code: "ROUND_OPEN", kind: "done", rule: "Правила 1, 2, 4", text: "Квоти на сьогодні: A — 3 SP, B — 1 SP + 1 SP перенесено з учора, C — 2 SP.", fx: {} },
+      base: { code: "—", kind: "ret", rule: "", text: "Без координації немає ні слотів, ні ліміту. Кожен агент пише людині, коли вважає за потрібне.", fx: {} } },
+
+    { t: "08:30", who: "A",
+      req: { title: "Підтвердити реліз v2.4", cls: "XS", raw: 1, cost: 2, risk: "high", dc: "must-ask", deadline: "сьогодні 15:00", wait: false,
+             note: "Клас XS коштує 1 SP, але ризик високий: мінімум 2 SP і обов’язковий блок ризиків." },
+      game: { code: "SCHEDULED_DEEP", kind: "sched", rule: "Правила 3, 6", text: "Ризикове рішення не може бути дешевим «так/ні». Запит іде в пакет 10:00: місце зарезервовано, але ще не списано.",
+              fx: { slotAdd: ["deep", { id: "a1", who: "A", title: "Реліз v2.4", cost: 2 }] } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Повідомлення приходить одразу: 1 SP перемикання + 1 SP рішення. Блоку ризиків ніхто не вимагає.", fx: { base: ["A", 2] } } },
+
+    { t: "08:45", who: "B",
+      req: { title: "Прочитати звіт конкурентів на 20 сторінок", cls: "L", raw: 5, cost: 5, risk: "low", dc: "may-ask", deadline: "немає", wait: true },
+      game: { code: "RETURNED_PREP", kind: "ret", rule: "Правило 7", text: "Game Master повертає запит: замість звіту підготуй 2–3 варіанти з рекомендацією. Нічого не списано.",
+              fx: { returned: "B" } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Людина читає звіт посеред ранку: 1 + 5 SP.", fx: { base: ["B", 6] } } },
+
+    { t: "09:10", who: "C",
+      req: { title: "Обрати один із трьох варіантів лендингу", cls: "S", raw: 2, cost: 2, risk: "medium", dc: "may-ask", deadline: "завтра", wait: true },
+      game: { code: "SCHEDULED_DEEP", kind: "sched", rule: "Правило 6", text: "Додано до того самого пакета 10:00. Слот заповнено: 1 перемикання + 2 + 2 = 5 SP.",
+              fx: { slotAdd: ["deep", { id: "c1", who: "C", title: "Варіант лендингу", cost: 2 }] } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Третє переривання за ранок: 1 + 2 SP.", fx: { base: ["C", 3] } } },
+
+    { t: "09:20", who: "A",
+      req: { title: "Перейменувати тег у Jira?", cls: "XS", raw: 1, cost: 1, risk: "low", dc: "must-not-ask", deadline: "немає", wait: true },
+      game: { code: "RETURNED_SELF", kind: "ret", rule: "Правило 0", text: "Оборотна дрібниця в межах політики. Агент вирішує сам і записує рішення у FYI-журнал. До людини запит не доходить.",
+              fx: { fyi: ["A", "Перейменовано тег «v2.4-rc» у Jira"], self: "A" } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Шум: питання, яке агент мав вирішити сам. 1 + 1 SP.", fx: { base: ["A", 2], noise: 1 } } },
+
+    { t: "09:40", who: "C",
+      req: { title: "Підтвердити колір кнопки", cls: "XS", raw: 1, cost: 1, risk: "low", dc: "may-ask", deadline: "немає", wait: true, batch: true },
+      game: { code: "SCHEDULED_DIGEST", kind: "sched", rule: "Правила 1, 6", text: "Може чекати й пакуватися, тому йде в дайджест 16:30. Зарезервовано 1 + 1 SP.",
+              fx: { slotAdd: ["digest", { id: "c2", who: "C", title: "Колір кнопки", cost: 1 }] } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Ще одне переривання через дрібницю: 1 + 1 SP.", fx: { base: ["C", 2] } } },
+
+    { t: "10:00", label: "Слот",
+      ev: { title: "Слот глибоких рішень", body: "Людина отримує один пакет: реліз A з блоком ризиків і вибір лендингу C." },
+      game: { code: "DELIVERED", kind: "done", rule: "Правило 4", text: "Списано 5 SP. Перемикання ділиться порівну: A платить 2.5 SP з квоти; C — 2 SP з квоти + 0.5 SP зі спільного пулу.",
+              fx: { deliver: ["deep", [["A", 2.5, 0], ["C", 2, 0.5]]] } },
+      base: { code: "—", kind: "ret", rule: "", text: "Слотів немає. До 10:00 людину вже перервали п’ять разів.", fx: {} } },
+
+    { t: "11:30", who: "B",
+      req: { title: "Звіт: обрати 1 з 2 варіантів (після доопрацювання)", cls: "S", raw: 2, cost: 2, risk: "low", dc: "may-ask", deadline: "завтра 12:00", wait: true, batch: true },
+      game: { code: "SCHEDULED_DIGEST", kind: "sched", rule: "Правило 6, крок 3", text: "Дедлайн завтра ставить B вище за кнопку C без дедлайну. Разом вони не вміщаються в дайджест (1 + 2 + 1 = 4 > 3 SP), тож кнопка C переходить на завтра з кодом DEFERRED_RANKED.",
+              fx: { slotAdd: ["digest", { id: "b2", who: "B", title: "Звіт: 1 з 2", cost: 2 }], bump: ["digest", "c2", "завтра, дайджест"] } },
+      base: { code: "—", kind: "ret", rule: "", text: "У цьому режимі людина вже прочитала весь звіт о 08:45, доопрацювання не було.", fx: {} } },
+
+    { t: "12:15", who: "B",
+      req: { title: "Інцидент: платіжний шлюз повертає помилки", cls: "XS", raw: 1, cost: 1, risk: "high", dc: "must-ask", deadline: "зараз", wait: false, trigger: true },
+      game: { code: "BYPASS_TRIGGER_INCIDENT", kind: "int", rule: "Правило 6, крок 2", text: "Інцидент production є в закритому списку тригерів, тому людину перериваємо негайно. 1 + 1 SP списано з резерву, не з квоти. Обхід записано на B.",
+              fx: { interrupt: ["B", 2] } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Інцидент виглядає як шосте повідомлення за день і легко губиться серед дрібниць.", fx: { base: ["B", 2] } } },
+
+    { t: "14:00", who: "A",
+      req: { title: "«ТЕРМІНОВО!» Погодити пост у соцмережах", cls: "S", raw: 2, cost: 2, risk: "medium", dc: "must-ask", deadline: "завтра 12:00", wait: true, claim: true },
+      game: { code: "QUEUED_TOMORROW", kind: "ret", rule: "Правила 0, 6", text: "Зовнішня комунікація — обов’язково питати. Але «терміново» від агента не є тригером. Сьогодні місця немає, дедлайн завтра, тож запит перший у слоті 10:00 завтра. Індекс завищення терміновості A +1.",
+              fx: { queue: { id: "a2", who: "A", title: "Пост у соцмережах", when: "завтра, 10:00" }, inflate: "A" } },
+      base: { code: "INTERRUPT", kind: "int", rule: "", text: "Агент пише «терміново», і людина відривається від роботи: 1 + 2 SP.", fx: { base: ["A", 3] } } },
+
+    { t: "16:30", label: "Слот",
+      ev: { title: "Дайджест", body: "Один пакет наприкінці дня: вибір варіанта для B." },
+      game: { code: "DELIVERED", kind: "done", rule: "Правило 4", text: "Списано 3 SP: B платить 2 SP з квоти (1 + 1 перенесений) і 1 SP зі спільного пулу.",
+              fx: { deliver: ["digest", [["B", 2, 1]]] } },
+      base: { code: "—", kind: "ret", rule: "", text: "Дайджесту немає.", fx: {} } },
+
+    { t: "18:00", label: "Кінець",
+      ev: { title: "Кінець раунду", body: "Підсумок дня, перенос квот, FYI-журнал." },
+      game: { code: "ROUND_CLOSE", kind: "done", rule: "Правило 4", text: "Перенос: A — 0.5 SP (завтра 3.5), B і C — 0 (завтра 1 і 2). Залишок пулу 0.5 SP згорає. На завтра в черзі пост A і кнопка C.",
+              fx: { close: true } },
+      base: { code: "—", kind: "int", rule: "", text: "Сім переривань і 20 SP — удвічі понад денний ліміт. Інцидент і реліз отримали стільки ж уваги, скільки тег у Jira.", fx: { close: true } } }
+  ];
+
+  var state = { mode: "game", step: 0 };
+  var timer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) { return (Math.round(n * 10) / 10).toString(); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function pct(t) { var p = t.split(":"); return ((+p[0] + +p[1] / 60) - 8) / 10 * 100; }
+
+  function compute(mode, k) {
+    var s = {
+      agents: {}, pool: POOL, human: 0, reserve: 0, slots: { deep: [], digest: [] }, delivered: {},
+      queue: [], fyi: [], planned: 0, unplanned: 0, noise: 0, baseTotal: 0, closed: false, ticks: []
+    };
+    Object.keys(AG).forEach(function (w) {
+      s.agents[w] = { avail: AG[w].G + AG[w].carry, quota: 0, pool: 0, bypass: 0, inflate: 0, prep: 0, self: 0, base: 0 };
+    });
+    for (var i = 0; i <= k; i++) {
+      var st = STEPS[i], fx = (mode === "game" ? st.game : st.base).fx;
+      if (fx.slotAdd) s.slots[fx.slotAdd[0]].push(fx.slotAdd[1]);
+      if (fx.bump) {
+        var list = s.slots[fx.bump[0]];
+        for (var j = 0; j < list.length; j++) if (list[j].id === fx.bump[1]) {
+          var it = list.splice(j, 1)[0];
+          s.queue.push({ id: it.id, who: it.who, title: it.title, when: fx.bump[2] });
+          break;
+        }
+      }
+      if (fx.returned) s.agents[fx.returned].prep++;
+      if (fx.self) s.agents[fx.self].self++;
+      if (fx.fyi) s.fyi.push({ who: fx.fyi[0], text: fx.fyi[1] });
+      if (fx.deliver) {
+        var sid = fx.deliver[0];
+        s.delivered[sid] = true;
+        s.human += slotCost(s.slots[sid]);
+        s.planned++;
+        fx.deliver[1].forEach(function (c) { s.agents[c[0]].quota += c[1]; s.agents[c[0]].pool += c[2]; s.pool -= c[2]; });
+      }
+      if (fx.interrupt) { s.reserve += fx.interrupt[1]; s.agents[fx.interrupt[0]].bypass++; s.unplanned++; s.ticks.push(st.t); }
+      if (fx.queue) s.queue.push(fx.queue);
+      if (fx.inflate) s.agents[fx.inflate].inflate++;
+      if (fx.base) { s.baseTotal += fx.base[1]; s.agents[fx.base[0]].base += fx.base[1]; s.unplanned++; s.ticks.push(st.t); }
+      if (fx.noise) s.noise += fx.noise;
+      if (fx.close) s.closed = true;
+    }
+    return s;
+  }
+  function slotCost(items) {
+    if (!items.length) return 0;
+    return 1 + items.reduce(function (a, b) { return a + b.cost; }, 0);
+  }
+
+  function renderSteps() {
+    var html = STEPS.map(function (st, i) {
+      var dot = st.who ? '<i class="dot" style="--ag:' + AG[st.who].color + '"></i>' : '<i class="dot"></i>';
+      var lbl = st.who ? st.who : st.label;
+      var cls = "step" + (i < state.step ? " past" : "");
+      return '<button type="button" class="' + cls + '" data-i="' + i + '"' + (i === state.step ? ' aria-current="step"' : "") + ">" + dot + st.t + " " + esc(lbl) + "</button>";
+    }).join("");
+    $("steps").innerHTML = html;
+    var cur = $("steps").querySelector('[aria-current="step"]');
+    if (cur && cur.scrollIntoView) {
+      var box = $("steps");
+      box.scrollLeft = Math.max(0, cur.offsetLeft - box.clientWidth / 2 + cur.clientWidth / 2);
+    }
+  }
+
+  function renderTrack(s) {
+    var h = "";
+    for (var hr = 8; hr <= 18; hr += 2) h += '<div class="hour" style="left:' + pct(hr + ":00") + '%"><span>' + hr + ":00</span></div>";
+    SLOTS.forEach(function (sl) {
+      var left = pct(sl.time), w = pct(sl.end) - left;
+      var cls = state.mode === "base" ? "off" : (s.delivered[sl.id] ? "done" : "");
+      h += '<div class="slotblk ' + cls + '" style="left:' + left + "%;width:" + w + '%">' + sl.time + "</div>";
+    });
+    s.ticks.forEach(function (t) { h += '<div class="zap" style="left:' + pct(t) + '%" title="переривання ' + t + '"></div>'; });
+    h += '<div class="now" style="left:' + pct(STEPS[state.step].t) + '%"></div>';
+    $("daytrack").innerHTML = h;
+  }
+
+  function renderAgents(s) {
+    var game = state.mode === "game";
+    var html = '<span class="eyebrow">Дошки агентів</span>';
+    Object.keys(AG).forEach(function (w) {
+      var a = AG[w], x = s.agents[w];
+      html += '<div class="agent" style="--ag:' + a.color + '">';
+      html += '<div class="agent-head"><b>' + a.name + "</b><small>" + a.project + "<br>" + a.weight + "</small></div>";
+      if (game) {
+        var used = Math.min(1, x.quota / x.avail) * 100;
+        html += '<div class="meter" title="Витрачено з квоти"><i style="width:' + used + '%"></i></div>';
+        html += '<dl class="kv">';
+        html += "<dt>Квота сьогодні</dt><dd>" + a.G + (a.carry ? " + " + a.carry + " (перенос)" : "") + " SP</dd>";
+        html += "<dt>Витрачено з квоти</dt><dd>" + fmt(x.quota) + " / " + fmt(x.avail) + "</dd>";
+        html += "<dt>Зі спільного пулу</dt><dd>" + fmt(x.pool) + "</dd>";
+        html += "<dt>Повернуто (доопрацювати / сам)</dt><dd>" + x.prep + " / " + x.self + "</dd>";
+        html += "<dt>Обходи черги</dt><dd" + (x.bypass ? ' class="hot"' : "") + ">" + x.bypass + "</dd>";
+        html += "<dt>Завищення терміновості</dt><dd" + (x.inflate ? ' class="hot"' : "") + ">" + x.inflate + "</dd>";
+        html += "</dl>";
+        if (s.closed) {
+          var left = x.avail - x.quota;
+          html += '<div class="tomorrow">Завтра: ' + fmt(a.G + Math.min(a.G, Math.max(0, left))) + " SP (перенос " + fmt(Math.min(a.G, Math.max(0, left))) + ")</div>";
+        }
+      } else {
+        var bw = Math.min(100, x.base / LIMIT * 100);
+        html += '<div class="meter" title="Увага, витрачена на переривання"><i style="width:' + bw + '%"></i></div>';
+        html += '<dl class="kv"><dt>Увага людини на переривання</dt><dd>' + x.base + " SP</dd>";
+        html += "<dt>Ліміту чи квоти</dt><dd>немає</dd></dl>";
+      }
+      html += "</div>";
+    });
+    $("agents").innerHTML = html;
+  }
+
+  function chip(text, cls) { return '<span class="chip ' + (cls || "") + '">' + esc(text) + "</span>"; }
+
+  function renderEvent() {
+    var st = STEPS[state.step], d = state.mode === "game" ? st.game : st.base, card;
+    if (st.req) {
+      var r = st.req, a = AG[st.who];
+      var cost = state.mode === "game" ? r.cost : r.raw;
+      var chips = chip("клас " + r.cls) +
+        chip("ризик " + r.risk, r.risk === "high" ? "risk-high" : "") +
+        chip(r.dc, r.dc === "must-ask" ? "must" : (r.dc === "must-not-ask" ? "self" : "")) +
+        chip("дедлайн: " + r.deadline) +
+        chip(r.wait ? "може чекати" : "не може чекати") +
+        (r.batch ? chip("batchable") : "") +
+        (r.trigger ? chip("тригер: інцидент", "trig") : "") +
+        (r.claim ? chip("агент: «терміново»") : "");
+      card = '<article class="rcard" style="--ag:' + a.color + '">' +
+        '<div class="band"><span class="who">' + a.name + '</span><span class="time">' + st.t + "</span></div>" +
+        '<div class="body"><div class="gem">' + (state.mode === "game" && r.cost !== r.raw ? "<s>" + r.raw + "</s>" : "") + "<div><b>" + cost + "</b><small>SP</small></div></div>" +
+        "<h3>" + esc(r.title) + "</h3><div class=\"chips\">" + chips + "</div>" +
+        (r.note && state.mode === "game" ? '<p class="card-note">' + esc(r.note) + "</p>" : "") +
+        "</div></article>";
+    } else {
+      card = '<article class="rcard sys">' +
+        '<div class="band"><span class="who">Подія</span><span class="time">' + st.t + "</span></div>" +
+        '<div class="body"><h3>' + esc(st.ev.title) + "</h3><p>" + esc(st.ev.body) + "</p></div></article>";
+    }
+    var kind = { sched: "k-sched", ret: "k-ret", int: "k-int", done: "k-done" }[d.kind] || "";
+    var dec = '<div class="decision"><span class="who">' + (state.mode === "game" ? "Рішення Game Master" : "Що відбувається без координації") + "</span>" +
+      '<span class="code ' + kind + '">' + esc(d.code) + "</span>" +
+      (d.rule ? '<span class="rule">' + esc(d.rule) + "</span>" : "") +
+      "<p>" + esc(d.text) + "</p></div>";
+    $("event").innerHTML = card + dec;
+  }
+
+  function renderSlots(s) {
+    var game = state.mode === "game";
+    $("slots").innerHTML = SLOTS.map(function (sl) {
+      var items = s.slots[sl.id], done = !!s.delivered[sl.id], used = slotCost(items);
+      var cls = "slot" + (!game ? " off" : (done ? " done" : ""));
+      var cells = "";
+      if (game && items.length) {
+        cells += '<span class="cell sw" title="перемикання контексту">⇄</span>';
+        items.forEach(function (it) {
+          for (var c = 0; c < it.cost; c++) cells += '<span class="cell it" style="--ag:' + AG[it.who].color + '">' + (c === 0 ? it.who : "") + "</span>";
+        });
+      }
+      for (var e = game ? used : 0; e < sl.cap; e++) cells += '<span class="cell"></span>';
+      var list = game && items.length
+        ? items.map(function (it) { return '<div><i class="dot" style="--ag:' + AG[it.who].color + '"></i>' + esc(it.title) + ' <span class="mono num" style="margin-left:auto">' + it.cost + " SP</span></div>"; }).join("")
+        : '<div class="empty">' + (game ? "Поки порожньо" : "Не використовується") + "</div>";
+      var status = !game ? "без слотів" : (done ? "доставлено · списано " + used + " SP" : (items.length ? "зарезервовано " + used + " з " + sl.cap + " SP" : "вільно " + sl.cap + " SP"));
+      return '<div class="' + cls + '"><div class="slot-head"><b>' + sl.time + "</b><small>" + sl.label + " · місткість " + sl.cap + " SP</small></div>" +
+        '<div class="cells">' + cells + '</div><div class="slot-items">' + list + '</div><div class="slot-status">' + status + "</div></div>";
+    }).join("");
+  }
+
+  function renderHuman(s) {
+    var game = state.mode === "game", html = '<span class="eyebrow">Увага людини</span>', cells = "";
+    if (game) {
+      var pending = 0;
+      SLOTS.forEach(function (sl) { if (!s.delivered[sl.id]) pending += slotCost(s.slots[sl.id]); });
+      var total = s.human + s.reserve;
+      html += '<div class="bignum"><b>' + total + "</b><span>з " + LIMIT + " SP витрачено</span></div>";
+      for (var i = 0; i < LIMIT - RESERVE; i++) {
+        var c = i < s.human ? "full" : (i < s.human + pending ? "held" : "");
+        cells += '<div class="tc ' + c + '"></div>';
+      }
+      for (var r = 0; r < RESERVE; r++) cells += '<div class="tc res ' + (r < s.reserve ? "resfull" : "") + '"></div>';
+      html += '<div class="track">' + cells + "</div>";
+      html += '<div class="track-legend"><span><i class="tc full"></i>списано</span><span><i class="tc held"></i>зарезервовано у слоті</span><span><i class="tc res"></i>резерв для аварій</span></div>';
+      html += '<div class="pool"><span>Спільний пул</span><span class="bar"><i style="width:' + (s.pool / POOL * 100) + '%"></i></span><span class="mono num">' + fmt(s.pool) + " SP</span></div>";
+      html += '<div class="stats">' +
+        '<div class="stat' + (s.unplanned > 1 ? " bad" : "") + '"><b>' + s.unplanned + "</b><span>переривань поза планом</span></div>" +
+        '<div class="stat"><b>' + s.planned + "</b><span>планових сесій</span></div>" +
+        '<div class="stat"><b>0</b><span>шуму дійшло до людини</span></div>' +
+        '<div class="stat"><b>' + s.queue.length + "</b><span>у видимій черзі</span></div></div>";
+    } else {
+      var n = Math.max(LIMIT, s.baseTotal);
+      html += '<div class="bignum' + (s.baseTotal > LIMIT ? " bad" : "") + '"><b>' + s.baseTotal + "</b><span>з " + LIMIT + " SP витрачено</span></div>";
+      for (var j = 0; j < n; j++) {
+        var cc = j < s.baseTotal ? (j >= LIMIT ? "overflow" : "full") : "";
+        cells += '<div class="tc ' + cc + '"></div>';
+      }
+      html += '<div class="track over">' + cells + "</div>";
+      html += '<div class="track-legend"><span><i class="tc full"></i>у межах ліміту</span><span><i class="tc overflow"></i>понад ліміт</span></div>';
+      html += '<div class="stats">' +
+        '<div class="stat' + (s.unplanned > 1 ? " bad" : "") + '"><b>' + s.unplanned + "</b><span>переривань поза планом</span></div>" +
+        '<div class="stat"><b>0</b><span>планових сесій</span></div>' +
+        '<div class="stat' + (s.noise ? " bad" : "") + '"><b>' + s.noise + "</b><span>шуму дійшло до людини</span></div>" +
+        '<div class="stat"><b>—</b><span>черги немає</span></div></div>';
+    }
+    $("human").innerHTML = html;
+  }
+
+  function renderQueue(s) {
+    var game = state.mode === "game", html = '<span class="eyebrow">Черга, яку бачить людина</span>';
+    if (!game) {
+      html += '<ul class="list"><li class="empty">Черги немає: усе приходить одразу.</li></ul>';
+      $("queue").innerHTML = html;
+      return;
+    }
+    html += '<ul class="list">' + (s.queue.length ? s.queue.map(function (q) {
+      return '<li><i class="dot" style="--ag:' + AG[q.who].color + '"></i>' + esc(q.title) + '<span class="when">' + esc(q.when) + "</span></li>";
+    }).join("") : '<li class="empty">Порожньо</li>') + "</ul>";
+    html += '<span class="eyebrow">FYI-журнал автономних рішень</span>';
+    html += '<ul class="list">' + (s.fyi.length ? s.fyi.map(function (f) {
+      return '<li><i class="dot" style="--ag:' + AG[f.who].color + '"></i>' + esc(f.text) + "</li>";
+    }).join("") : '<li class="empty">Порожньо</li>') + "</ul>";
+    $("queue").innerHTML = html;
+  }
+
+  function renderCompare() {
+    var g = compute("game", STEPS.length - 1), b = compute("base", STEPS.length - 1);
+    var rows = [
+      { label: "Увага людини, SP", g: g.human + g.reserve, b: b.baseTotal, max: 20, lim: LIMIT },
+      { label: "Переривання поза планом", g: g.unplanned, b: b.unplanned, max: 8 },
+      { label: "Шум, що дійшов до людини", g: 0, b: b.noise, max: 8 },
+      { label: "Ризикові рішення з блоком ризиків", g: 2, b: 0, max: 8 }
+    ];
+    $("cmp").innerHTML = rows.map(function (r) {
+      function line(name, v, cls) {
+        return '<div class="bar-line"><span>' + name + '</span><span class="bg"><i class="' + cls + '" style="width:' + Math.min(100, v / r.max * 100) + '%"></i>' +
+          (r.lim ? '<span class="lim" style="left:' + (r.lim / r.max * 100) + '%" title="ліміт"></span>' : "") + "</span><b>" + v + "</b></div>";
+      }
+      return '<div class="cmp-row"><span>' + r.label + (r.lim ? ' <small class="mono" style="color:var(--muted)">| — ліміт ' + r.lim + "</small>" : "") + '</span><div class="bars">' +
+        line("Гра", r.g, "g") + line("Без координації", r.b, "b") + "</div></div>";
+    }).join("");
+  }
+
+  function render() {
+    var s = compute(state.mode, state.step);
+    $("modeGame").setAttribute("aria-pressed", state.mode === "game");
+    $("modeBase").setAttribute("aria-pressed", state.mode === "base");
+    $("prev").disabled = state.step === 0;
+    $("next").disabled = state.step === STEPS.length - 1;
+    $("boardTitle").textContent = (state.mode === "game" ? "Раунд з Game Master" : "Той самий день без координації") + " · " + STEPS[state.step].t;
+    renderSteps(); renderTrack(s); renderAgents(s); renderEvent(); renderSlots(s); renderHuman(s); renderQueue(s);
+  }
+
+  function go(i) { state.step = Math.max(0, Math.min(STEPS.length - 1, i)); render(); }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } $("play").textContent = "Програти день"; }
+
+  $("next").addEventListener("click", function () { stop(); go(state.step + 1); });
+  $("prev").addEventListener("click", function () { stop(); go(state.step - 1); });
+  $("reset").addEventListener("click", function () { stop(); go(0); });
+  $("play").addEventListener("click", function () {
+    if (timer) { stop(); return; }
+    if (state.step === STEPS.length - 1) go(0);
+    $("play").textContent = "Пауза";
+    timer = setInterval(function () {
+      if (state.step >= STEPS.length - 1) { stop(); return; }
+      go(state.step + 1);
+    }, 1700);
+  });
+  $("modeGame").addEventListener("click", function () { state.mode = "game"; render(); });
+  $("modeBase").addEventListener("click", function () { state.mode = "base"; render(); });
+  $("steps").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-i]");
+    if (b) { stop(); go(+b.getAttribute("data-i")); }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+    if (e.key === "ArrowRight") { stop(); go(state.step + 1); }
+    if (e.key === "ArrowLeft") { stop(); go(state.step - 1); }
+  });
+
+  function start(data) {
+    if (data && data.mode) state.mode = data.mode;
+    if (data && typeof data.step === "number") state.step = data.step;
+    renderCompare();
+    render();
+  }
+  if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
+    window.claude.hot.snapshot(function () { return { mode: state.mode, step: state.step }; });
+  }
+  if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
+  else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
+})();
+</script>
