@@ -368,7 +368,7 @@ footer { font-size: 12px; color: var(--muted); }
       </div>
 
       <div class="panel">
-        <h3>Порядок рішень supervisor</h3>
+        <h3>Порядок рішень Game Master</h3>
         <ol class="order">
           <li><b>Валідація.</b> Неповний запит або must-not-ask — повернути.</li>
           <li><b>Критичний тригер</b> із закритого списку — переривання з резерву.</li>
@@ -387,7 +387,7 @@ footer { font-size: 12px; color: var(--muted); }
       <h2 id="cmpTitle">Гра проти роботи без координації</h2>
     </div>
     <div class="panel cmp" id="cmp"></div>
-    <p class="note">Сценарій ілюстративний: ціни, квоти й час — стартові припущення концепту, а не виміряні дані. Для людини черга supervisor без квот дала б у цей день ту саму картину; квоти змінюють лише облік між агентами. Саме тому перевірка порівнює чергу без квот із повною грою, перш ніж впроваджувати квоти.</p>
+    <p class="note">Сценарій ілюстративний: ціни, квоти й час — стартові припущення концепту, а не виміряні дані. Для людини черга Game Master без квот дала б у цей день ту саму картину; квоти змінюють лише облік між агентами. Саме тому перевірка порівнює чергу без квот із повною грою, перш ніж впроваджувати квоти.</p>
   </section>
 
   <footer>Agent Attention Game · концепт v0.2 · 12 жовтня 2026 року</footer>
@@ -410,7 +410,7 @@ footer { font-size: 12px; color: var(--muted); }
 
   var STEPS = [
     { t: "08:00", label: "Ранок",
-      ev: { title: "Supervisor відкриває раунд", body: "Календар дає два вікна: глибокі рішення о 10:00 і дайджест о 16:30. Ліміт дня 10 SP: 2 SP резерв, 6 SP квоти агентів, 2 SP спільний пул." },
+      ev: { title: "Game Master відкриває раунд", body: "Календар дає два вікна: глибокі рішення о 10:00 і дайджест о 16:30. Ліміт дня 10 SP: 2 SP резерв, 6 SP квоти агентів, 2 SP спільний пул." },
       game: { code: "ROUND_OPEN", kind: "done", rule: "Правила 1, 2, 4", text: "Квоти на сьогодні: A — 3 SP, B — 1 SP + 1 SP перенесено з учора, C — 2 SP.", fx: {} },
       base: { code: "—", kind: "ret", rule: "", text: "Без координації немає ні слотів, ні ліміту. Кожен агент пише людині, коли вважає за потрібне.", fx: {} } },
 
@@ -423,7 +423,7 @@ footer { font-size: 12px; color: var(--muted); }
 
     { t: "08:45", who: "B",
       req: { title: "Прочитати звіт конкурентів на 20 сторінок", cls: "L", raw: 5, cost: 5, risk: "low", dc: "may-ask", deadline: "немає", wait: true },
-      game: { code: "RETURNED_PREP", kind: "ret", rule: "Правило 7", text: "Supervisor повертає запит: замість звіту підготуй 2–3 варіанти з рекомендацією. Нічого не списано.",
+      game: { code: "RETURNED_PREP", kind: "ret", rule: "Правило 7", text: "Game Master повертає запит: замість звіту підготуй 2–3 варіанти з рекомендацією. Нічого не списано.",
               fx: { returned: "B" } },
       base: { code: "INTERRUPT", kind: "int", rule: "", text: "Людина читає звіт посеред ранку: 1 + 5 SP.", fx: { base: ["B", 6] } } },
 
@@ -621,7 +621,7 @@ footer { font-size: 12px; color: var(--muted); }
         '<div class="body"><h3>' + esc(st.ev.title) + "</h3><p>" + esc(st.ev.body) + "</p></div></article>";
     }
     var kind = { sched: "k-sched", ret: "k-ret", int: "k-int", done: "k-done" }[d.kind] || "";
-    var dec = '<div class="decision"><span class="who">' + (state.mode === "game" ? "Рішення supervisor" : "Що відбувається без координації") + "</span>" +
+    var dec = '<div class="decision"><span class="who">' + (state.mode === "game" ? "Рішення Game Master" : "Що відбувається без координації") + "</span>" +
       '<span class="code ' + kind + '">' + esc(d.code) + "</span>" +
       (d.rule ? '<span class="rule">' + esc(d.rule) + "</span>" : "") +
       "<p>" + esc(d.text) + "</p></div>";
@@ -729,7 +729,7 @@ footer { font-size: 12px; color: var(--muted); }
     $("modeBase").setAttribute("aria-pressed", state.mode === "base");
     $("prev").disabled = state.step === 0;
     $("next").disabled = state.step === STEPS.length - 1;
-    $("boardTitle").textContent = (state.mode === "game" ? "Раунд з supervisor" : "Той самий день без координації") + " · " + STEPS[state.step].t;
+    $("boardTitle").textContent = (state.mode === "game" ? "Раунд з Game Master" : "Той самий день без координації") + " · " + STEPS[state.step].t;
     renderSteps(); renderTrack(s); renderAgents(s); renderEvent(); renderSlots(s); renderHuman(s); renderQueue(s);
   }
 
